@@ -17,7 +17,6 @@
 
 @implementation CDTRequestLimitInterceptor
 
-
 - (instancetype)init
 {
     if (self = [super init]) {
@@ -27,11 +26,14 @@
 }
 
 /**
-
+ * Interceptor to retry after an exponential backoff if we receive a 429 error
  */
 - (CDTHTTPInterceptorContext *)interceptResponseInContext:(CDTHTTPInterceptorContext *)context
 {
     if (context.response.statusCode == 429) {
+        
+        CDTLogInfo(CDTTD_REMOTE_REQUEST_CONTEXT, @"429 error code received. Will retry in %f seconds.", self.sleep);
+        
         // sleep for a short time before making next request
         [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
                                  beforeDate: [NSDate dateWithTimeIntervalSinceNow:self.sleep]];
@@ -40,9 +42,5 @@
     }
     return context;
 }
-
-
-
-
 
 @end

@@ -15,6 +15,7 @@
 
 #import "CDTPullReplication.h"
 #import "CDTSessionCookieInterceptor.h"
+#import "CDTRequestLimitInterceptor.h"
 #import "CDTDatastore.h"
 #import "CDTLogging.h"
 #import "TDMisc.h"
@@ -42,6 +43,7 @@
             sourceComponents.password = nil;
             [self addInterceptor:cookieInterceptor];
         }
+        [self addInterceptor:[[CDTRequestLimitInterceptor alloc] init]];
         
         _source = sourceComponents.URL;
         _target = target;
