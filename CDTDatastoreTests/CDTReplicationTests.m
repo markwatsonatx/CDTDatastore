@@ -27,10 +27,20 @@
 #import "TDPuller.h"
 #import "TDPusher.h"
 #import "CDTSessionCookieInterceptor.h"
+#import "CDTRequestLimitInterceptor.h"
 #import <OHHTTPStubs/OHHTTPStubs.h>
 #import <OHHTTPStubs/OHHTTPStubsResponse+JSON.h>
 #import <OCMock/OCMock.h>
 #import <netinet/in.h>
+
+// these interfaces declare a few internal properties we want to access...
+@interface CDTReplicator ()
+@property (nonatomic, copy) CDTAbstractReplication *cdtReplication;
+@end
+
+@interface CDTRequestLimitInterceptor ()
+@property NSTimeInterval sleep;
+@end
 
 @interface ChangesFeedRequestCheckInterceptor : NSObject <CDTHTTPInterceptor>
 
@@ -63,28 +73,37 @@
 
 @end
 
-@interface CDTReplicationTests : CloudantSyncTests
+@interface SimpleHttpServer : NSObject
 
 @property int listenSocketFd;
+@property NSString *header;
 
 @end
 
-@implementation CDTReplicationTests
+@implementation SimpleHttpServer
+
+- (id)initWithHeader:(NSString*)header
+{
+    if (self = [super init]) {
+        self.header = header;
+    }
+    return self;
+}
 
 // Start a simple HTTP server on localhost that responds to any message with a "404 Not Found".
-- (void)startSimpleHttp404Server {
+- (void)start {
     self.listenSocketFd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     const int buf_size = 1024;
-
+    
     struct sockaddr_in serv_addr;
     memset(&serv_addr, '0', sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(8080);
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
+    
     bind(self.listenSocketFd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
     listen(self.listenSocketFd, 10);
-
+    
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         bool stopped = false;
         while (!stopped)
@@ -93,12 +112,12 @@
             if (connfd > 0) {
                 char buffer[buf_size];
                 bzero(buffer, buf_size);
-
+                
                 // Receive a message.
                 recv(connfd, buffer, buf_size, 0);
-
+                
                 // We don't care what the message was (or if we read it all), just send back a 404.
-                char* header = "HTTP/1.0 404 Not Found\n";
+                const char* header = [self.header cString];
                 write(connfd, header, strlen(header));
                 close(connfd);
             } else {
@@ -108,9 +127,19 @@
     });
 }
 
-- (void)stopSimpleHttp404Server {
+- (void)stop {
     close(self.listenSocketFd);
 }
+
+@end
+
+@interface CDTReplicationTests : CloudantSyncTests
+
+@end
+
+@implementation CDTReplicationTests
+
+
 - (void)testURLCredsReplacedWithCookieInterceptorPull
 {
     NSError *error;
@@ -142,6 +171,34 @@
     XCTAssertEqualObjects([push.httpInterceptors[0] class], [CDTSessionCookieInterceptor class]);
 }
 
+- (void)test429Retry
+{
+    NSError *error;
+    // simple remote to send 429
+    SimpleHttpServer *server = [[SimpleHttpServer alloc] initWithHeader:@"HTTP/1.0 429 Too Many Requests\r\n\r\n"];
+    [server start];
+    NSString *remoteUrl = @"http://127.0.0.1:8080";
+    
+    CDTDatastore *tmp = [self.factory datastoreNamed:@"test_database" error:&error];
+    CDTPullReplication *pull =
+    [CDTPullReplication replicationWithSource:[NSURL URLWithString:remoteUrl] target:tmp];
+    CDTReplicatorFactory *replicatorFactory =
+    [[CDTReplicatorFactory alloc] initWithDatastoreManager:self.factory];
+    
+    CDTReplicator *replicator = [replicatorFactory oneWay:pull error:&error];
+    
+    dispatch_group_t taskGroup = dispatch_group_create();
+    [replicator startWithTaskGroup:taskGroup error:&error];
+    
+    dispatch_group_wait(taskGroup, DISPATCH_TIME_FOREVER);
+
+    // after 10 retries the sleep time should equal 512:
+    // 250ms * (2^11)
+    XCTAssertEqual(512, ((CDTRequestLimitInterceptor*)(replicator.cdtReplication.httpInterceptors[0])).sleep);
+    
+    [server stop];
+}
+
 - (void)testFiltersWithChangesFeed
 {
     NSError *error;
@@ -150,7 +207,8 @@
     // We can't use OHHTTPStubs to stub the server as that doesn't work with background
     // requests, so we just start a simple local server that returns 404 to anything it receives
     // and use that for our remote.
-    [self startSimpleHttp404Server];
+    SimpleHttpServer *server = [[SimpleHttpServer alloc] initWithHeader:@"HTTP/1.0 404 Not Found\r\n\r\n"];
+    [server start];
     NSString *remoteUrl = @"http://127.0.0.1:8080";
 
     CDTDatastore *tmp = [self.factory datastoreNamed:@"test_database" error:&error];
@@ -171,7 +229,7 @@
 
     XCTAssertTrue(interceptor.changesFeedRequestMade);
 
-    [self stopSimpleHttp404Server];
+    [server stop];
 }
 
 -(void)testReplicatorIsNilForNilDatastoreManager {
