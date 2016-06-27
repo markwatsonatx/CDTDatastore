@@ -504,11 +504,10 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
     if (_online) return NO;
     CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Going online", self);
     _online = YES;
-    
+
     if (_running) {
         _lastSequence = nil;
         self.error = nil;
-        
         [self checkSessionSkipCheckpoint:skipCheckpoint];
         [self postProgressChanged];
     }
@@ -612,7 +611,7 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
         }
         return;
     }
-    
+
     // First check whether a session exists
     [self asyncTaskStarted];
     [self sendAsyncRequest:@"GET"
@@ -621,14 +620,14 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
               onCompletion:^(id result, NSError* error) {
                   if (error) {
                       CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Session check failed: %@", self,
-                                 error);
+                              error);
                       self.error = error;
                   } else {
                       NSString* username = $castIf(
-                                                   NSString, [[result objectForKey:@"userCtx"] objectForKey:@"name"]);
+                          NSString, [[result objectForKey:@"userCtx"] objectForKey:@"name"]);
                       if (username) {
                           CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Active session, logged in as '%@'",
-                                     self, username);
+                                  self, username);
                           if (skipCheckpoint) {
                               [self beginReplicating];
                           }
