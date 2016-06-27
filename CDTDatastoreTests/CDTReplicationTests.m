@@ -108,8 +108,8 @@
     serv_addr.sin_port = htons(self.port);
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     
-    int resb = bind(self.listenSocketFd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
-    int resl = listen(self.listenSocketFd, 10);
+    bind(self.listenSocketFd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
+    listen(self.listenSocketFd, 10);
     
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         while (!self.stopped)
@@ -135,7 +135,7 @@
 
 - (void)stop {
     self.stopped = true;
-    int resc = close(self.listenSocketFd);
+    close(self.listenSocketFd);
 }
 
 @end
