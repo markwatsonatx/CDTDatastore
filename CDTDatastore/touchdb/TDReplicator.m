@@ -642,7 +642,6 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
                   [self asyncTasksFinished:1];
               }];
 }
-// mw:end
 
 // If there is no login session, attempt to log in, if the authorizer knows the parameters.
 - (void)login
