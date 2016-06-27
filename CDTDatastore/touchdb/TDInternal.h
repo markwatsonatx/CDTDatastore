@@ -147,6 +147,7 @@
 - (void)reachabilityChanged:(TDReachability*)reachability;
 - (BOOL)goOffline;
 - (BOOL)goOnline;
+- (BOOL)goOnlineSkipCheckpoint:(BOOL)skipCheckpoint;
 #if DEBUG
 @property (readonly) BOOL savingCheckpoint;
 #endif

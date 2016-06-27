@@ -215,15 +215,27 @@ static NSString* joinQuotedEscaped(NSArray* strings);
     [super stopped];
 }
 
+// mw:start
+//- (BOOL)goOnline
+//{
+//    if ([super goOnline]) return YES;
+//    // If we were already online (i.e. server is reachable) but got a reachability-change event,
+//    // tell the tracker to retry in case it's in retry mode after a transient failure. (I.e. the
+//    // state of the network might be better now.)
+//    if (_running && _online) [_changeTracker retry];
+//    return NO;
+//}
+
 - (BOOL)goOnline
 {
-    if ([super goOnline]) return YES;
+    if ([super goOnlineSkipCheckpoint:YES]) return YES;
     // If we were already online (i.e. server is reachable) but got a reachability-change event,
     // tell the tracker to retry in case it's in retry mode after a transient failure. (I.e. the
     // state of the network might be better now.)
     if (_running && _online) [_changeTracker retry];
     return NO;
 }
+// mw:end
 
 - (BOOL)goOffline
 {
@@ -257,7 +269,10 @@ static NSString* joinQuotedEscaped(NSArray* strings);
                         [[TDPulledRevision alloc] initWithDocID:docID revID:revID deleted:deleted];
                     // Remember its remote sequence ID (opaque), and make up a numeric sequence
                     // based on the order in which it appeared in the _changes feed:
-                    rev.remoteSequenceID = remoteSequenceID;
+                    // mw:start
+                    //rev.remoteSequenceID = remoteSequenceID;
+                    rev.remoteSequenceID = rev.revID;
+                    // mw:end
                     if (changes.count > 1) rev.conflicted = true;
                     CDTLogVerbose(CDTREPLICATION_LOG_CONTEXT, @"%@: Received #%@ %@", self,
                                remoteSequenceID, rev);
@@ -324,7 +339,9 @@ static NSString* joinQuotedEscaped(NSArray* strings);
         CDTLogVerbose(CDTREPLICATION_LOG_CONTEXT, @"%@: no new remote revisions to fetch", self);
         SequenceNumber seq = [_pendingSequences addValue:lastInboxSequence];
         [_pendingSequences removeSequence:seq];
-        self.lastSequence = _pendingSequences.checkpointedValue;
+        // mw:start
+        //self.lastSequence = _pendingSequences.checkpointedValue;
+        // mw:end
         return;
     }
 
@@ -334,13 +351,19 @@ static NSString* joinQuotedEscaped(NSArray* strings);
     // Dump the revs into the queues of revs to pull from the remote db:
     unsigned numBulked = 0;
     for (TDPulledRevision* rev in inbox.allRevisions) {
-        if (!_bulkGetSupported && rev.generation == 1 && !rev.deleted && !rev.conflicted) {
-            // Optimistically pull 1st-gen revs in bulk:
-            [_bulkRevsToPull addObject:rev];
-            ++numBulked;
-        } else {
-            [self queueRemoteRevision:rev];
-        }
+        // mw:start
+//        if (!_bulkGetSupported && rev.generation == 1 && !rev.deleted && !rev.conflicted) {
+//            // Optimistically pull 1st-gen revs in bulk:
+//            [_bulkRevsToPull addObject:rev];
+//            ++numBulked;
+//        } else {
+//            [self queueRemoteRevision:rev];
+//        }
+        
+        [_bulkRevsToPull addObject:rev];
+        ++numBulked;
+        // mw:end
+
         rev.sequence = [_pendingSequences addValue:rev.remoteSequenceID];
     }
     CDTLogInfo(CDTREPLICATION_LOG_CONTEXT,
@@ -617,13 +640,15 @@ static NSString* joinQuotedEscaped(NSArray* strings);
             {
                 SequenceNumber fakeSequence = rev.sequence;
                 NSArray* history = [TD_Database parseCouchDBRevisionHistory:rev.properties];
-                if (!history && rev.generation > 1) {
-                    CDTLogWarn(CDTREPLICATION_LOG_CONTEXT,
-                            @"%@: Missing revision history in response for %@", self, rev);
-                    self.error = TDStatusToNSError(kTDStatusUpstreamError, nil);
-                    [self revisionFailed];
-                    continue;
-                }
+                // mw:start
+//                if (!history && rev.generation > 1) {
+//                    CDTLogWarn(CDTREPLICATION_LOG_CONTEXT,
+//                            @"%@: Missing revision history in response for %@", self, rev);
+//                    self.error = TDStatusToNSError(kTDStatusUpstreamError, nil);
+//                    [self revisionFailed];
+//                    continue;
+//                }
+                // mw: end
                 CDTLogVerbose(CDTREPLICATION_LOG_CONTEXT, @"%@ inserting %@ %@", self, rev.docID,
                            [history my_compactDescription]);
 
@@ -651,7 +676,9 @@ static NSString* joinQuotedEscaped(NSArray* strings);
                    (unsigned)downloads.count);
 
         // Checkpoint:
-        self.lastSequence = _pendingSequences.checkpointedValue;
+        // mw:start
+        //self.lastSequence = _pendingSequences.checkpointedValue;
+        // mw:end
 
         //        success = YES;
     }

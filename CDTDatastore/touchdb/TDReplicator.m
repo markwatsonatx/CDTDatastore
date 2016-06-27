@@ -493,21 +493,44 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
     return YES;
 }
 
+// mw:start
+//- (BOOL)goOnline
+//{
+//    if (_online) return NO;
+//    CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Going online", self);
+//    _online = YES;
+//
+//    if (_running) {
+//        _lastSequence = nil;
+//        self.error = nil;
+//
+//        [self checkSession];
+//        [self postProgressChanged];
+//    }
+//    return YES;
+//}
+
 - (BOOL)goOnline
+{
+    return [self goOnlineSkipCheckpoint:NO];
+}
+
+- (BOOL)goOnlineSkipCheckpoint:(BOOL)skipCheckpoint
 {
     if (_online) return NO;
     CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Going online", self);
     _online = YES;
-
+    
     if (_running) {
         _lastSequence = nil;
         self.error = nil;
-
-        [self checkSession];
+        
+        [self checkSessionSkipCheckpoint:skipCheckpoint];
         [self postProgressChanged];
     }
     return YES;
 }
+// mw:end
 
 - (void)reachabilityChanged:(TDReachability*)host
 {
@@ -592,13 +615,55 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
 }
 
 // Before doing anything else, determine whether we have an active login session.
-- (void)checkSession
+// mw:start
+//- (void)checkSession
+//{
+//    if (![_authorizer respondsToSelector:@selector(loginParametersForSite:)]) {
+//        [self fetchRemoteCheckpointDoc];
+//        return;
+//    }
+//
+//    // First check whether a session exists
+//    [self asyncTaskStarted];
+//    [self sendAsyncRequest:@"GET"
+//                      path:@"/_session"
+//                      body:nil
+//              onCompletion:^(id result, NSError* error) {
+//                  if (error) {
+//                      CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Session check failed: %@", self,
+//                              error);
+//                      self.error = error;
+//                  } else {
+//                      NSString* username = $castIf(
+//                          NSString, [[result objectForKey:@"userCtx"] objectForKey:@"name"]);
+//                      if (username) {
+//                          CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Active session, logged in as '%@'",
+//                                  self, username);
+//                          [self fetchRemoteCheckpointDoc];
+//                      } else {
+//                          [self login];
+//                      }
+//                  }
+//                  [self asyncTasksFinished:1];
+//              }];
+//}
+
+- (void)checkSession {
+    [self checkSessionSkipCheckpoint:NO];
+}
+
+- (void)checkSessionSkipCheckpoint:(BOOL)skipCheckpoint
 {
     if (![_authorizer respondsToSelector:@selector(loginParametersForSite:)]) {
-        [self fetchRemoteCheckpointDoc];
+        if (skipCheckpoint) {
+            [self beginReplicating];
+        }
+        else {
+            [self fetchRemoteCheckpointDoc];
+        }
         return;
     }
-
+    
     // First check whether a session exists
     [self asyncTaskStarted];
     [self sendAsyncRequest:@"GET"
@@ -607,15 +672,20 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
               onCompletion:^(id result, NSError* error) {
                   if (error) {
                       CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Session check failed: %@", self,
-                              error);
+                                 error);
                       self.error = error;
                   } else {
                       NSString* username = $castIf(
-                          NSString, [[result objectForKey:@"userCtx"] objectForKey:@"name"]);
+                                                   NSString, [[result objectForKey:@"userCtx"] objectForKey:@"name"]);
                       if (username) {
                           CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Active session, logged in as '%@'",
-                                  self, username);
-                          [self fetchRemoteCheckpointDoc];
+                                     self, username);
+                          if (skipCheckpoint) {
+                              [self beginReplicating];
+                          }
+                          else {
+                              [self fetchRemoteCheckpointDoc];
+                          }
                       } else {
                           [self login];
                       }
@@ -623,6 +693,7 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
                   [self asyncTasksFinished:1];
               }];
 }
+// mw:end
 
 // If there is no login session, attempt to log in, if the authorizer knows the parameters.
 - (void)login
