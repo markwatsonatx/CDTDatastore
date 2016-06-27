@@ -30,7 +30,7 @@ typedef enum TDChangeTrackerMode { kOneShot, kLongPoll, kContinuous } TDChangeTr
 /** Reads the continuous-mode _changes feed of a database, and sends the individual change entries
  * to its client.  */
 @interface TDChangeTracker : NSObject {
-@protected
+   @protected
     NSURL* _databaseURL;
     id<TDChangeTrackerClient> __weak _client;
     TDChangeTrackerMode _mode;
@@ -73,8 +73,8 @@ typedef enum TDChangeTrackerMode { kOneShot, kLongPoll, kContinuous } TDChangeTr
 - (void)stop;
 
 /** Asks the tracker to retry connecting, _if_ it's currently disconnected but waiting to retry.
- This should be called when the reachability of the remote host changes, or when the
- app is reactivated. */
+    This should be called when the reachability of the remote host changes, or when the
+    app is reactivated. */
 - (void)retry;
 
 // Protected

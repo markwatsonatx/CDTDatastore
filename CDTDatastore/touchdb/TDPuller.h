@@ -14,7 +14,7 @@
 
 /** Replicator that pulls from a remote CouchDB. */
 @interface TDPuller : TDReplicator {
-@private
+   @private
     TDChangeTracker* _changeTracker;
     BOOL _caughtUp;                      // Have I received all current _changes entries?
     TDSequenceMap* _pendingSequences;    // Received but not yet copied into local DB
@@ -32,7 +32,7 @@
 
 /** A revision received from a remote server during a pull. Tracks the opaque remote sequence ID. */
 @interface TDPulledRevision : TD_Revision {
-@private
+   @private
     id _remoteSequenceID;
     bool _conflicted;
 }

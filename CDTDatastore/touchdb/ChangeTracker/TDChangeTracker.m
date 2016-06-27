@@ -80,7 +80,7 @@
     static NSString* const kModeNames[3] = { @"normal", @"longpoll", @"continuous" };
     NSMutableString* path;
     path = [NSMutableString stringWithFormat:@"_changes?feed=%@&heartbeat=%.0f", kModeNames[_mode],
-            _heartbeat * 1000.0];
+                                             _heartbeat * 1000.0];
     if (_includeConflicts) [path appendString:@"&style=all_docs"];
     id seq = _lastSequenceID;
     if (seq) {
@@ -103,19 +103,19 @@
                                                error:&error];
                 if (!value) {
                     CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"Illegal filter parameter %@ = %@", key,
-                               _filterParameters[key]);
+                            _filterParameters[key]);
                     continue;
                 }
             }
             [path appendFormat:@"&%@=%@", TDEscapeURLParam(key), TDEscapeURLParam(value)];
         }
     }
-    
+
     if (_docIDs) {
         if (_filterName) {
             CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"You can't set both a replication filter and "
-                       @"doc_ids, since doc_ids uses the internal _doc_ids "
-                       @"filter.");
+                                             @"doc_ids, since doc_ids uses the internal _doc_ids "
+                                             @"filter.");
         } else {
             NSError* error;
             NSString* docIDsParam = [TDJSON stringWithJSONObject:_docIDs
@@ -123,12 +123,12 @@
                                                            error:&error];
             if (!docIDsParam || error) {
                 CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"Illegal doc IDs %@, %@", [_docIDs description],
-                           [error localizedDescription]);
+                        [error localizedDescription]);
             }
             [path appendFormat:@"&filter=_doc_ids&doc_ids=%@", TDEscapeURLParam(docIDsParam)];
         }
     }
-    
+
     return path;
 }
 
@@ -145,7 +145,7 @@
 {
     CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Server error: %@", self, message);
     self.error =
-    [NSError errorWithDomain:@"TDChangeTracker" code:kTDStatusUpstreamError userInfo:nil];
+        [NSError errorWithDomain:@"TDChangeTracker" code:kTDStatusUpstreamError userInfo:nil];
 }
 
 - (BOOL)start
@@ -180,7 +180,7 @@
         retryDelay = MIN(retryDelay, kMaxRetryDelay);
         ++_retryCount;
         CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Connection error, retrying in %.1f sec: %@", self,
-                   retryDelay, error.localizedDescription);
+                retryDelay, error.localizedDescription);
         [self performSelector:@selector(retry) withObject:nil afterDelay:retryDelay];
     } else {
         CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Can't connect, giving up: %@", self, error);
@@ -222,10 +222,10 @@
             if (![self receivedChange:change]) {
                 if (errorMessage) {
                     *errorMessage =
-                    $sprintf(@"Invalid change object: %@",
-                             [TDJSON stringWithJSONObject:change
-                                                  options:TDJSONWritingAllowFragments
-                                                    error:nil]);
+                        $sprintf(@"Invalid change object: %@",
+                                 [TDJSON stringWithJSONObject:change
+                                                      options:TDJSONWritingAllowFragments
+                                                        error:nil]);
                 }
                 return NO;
             }

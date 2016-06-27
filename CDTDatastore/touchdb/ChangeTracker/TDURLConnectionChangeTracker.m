@@ -1,6 +1,6 @@
 //
 //  TDURLConnectionChangeTracker.m
-//
+//  
 //
 //  Created by Adam Cox on 1/5/15.
 //  Copyright (c) 2015 IBM.
@@ -57,7 +57,7 @@
                          lastSequence:lastSequenceID
                                client:client
                               session:session];
-    
+
     if(self){
         _session = session;
     }
@@ -83,7 +83,7 @@
     }
     
     NSArray *requestHeadersKeys = [self.requestHeaders allKeys];
-    
+
     if (self.authorizer) {
         NSString* authHeader = [self.authorizer authorizeURLRequest:self.request forRealm:nil];
         if (authHeader) {
@@ -96,14 +96,14 @@
     }
     
     self.task = [self.session dataTaskWithRequest:self.request taskDelegate:self];
-    
+
     [self.task resume];
     
     self.inputBuffer = [NSMutableData dataWithCapacity:0];
-    
+        
     self.startTime = [NSDate date];
     CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Started... <%@>", self, TDCleanURLtoString(url));
-    
+
     return YES;
 }
 
@@ -159,7 +159,7 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
         // credential and see what happens (probably a 401)
         
         if (challenge.previousFailureCount <= 1) {
-            
+
             NSURLCredential *cred = challenge.proposedCredential;
             if (cred == nil || challenge.previousFailureCount > 0) {
                 cred = [self.request.URL my_credentialForRealm:space.realm
@@ -209,7 +209,7 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     CDTLogVerbose(CDTREPLICATION_LOG_CONTEXT, @"%@: didReceiveResponse, status %ld", [self class], (long)status);
     
     [self.inputBuffer setLength:0];
-    
+
     if (TDStatusIsError(status)) {
         
         NSDictionary* errorInfo = nil;
@@ -219,8 +219,8 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
             NSString* authResponse = [httpresponse allHeaderFields][@"WWW-Authenticate"];
             
             CDTLogError(CDTREPLICATION_LOG_CONTEXT,
-                        @"%@: HTTP auth failed; sent Authorization: %@  ;  got WWW-Authenticate: %@", [self class],
-                        authorization, authResponse);
+                       @"%@: HTTP auth failed; sent Authorization: %@  ;  got WWW-Authenticate: %@", [self class],
+                       authorization, authResponse);
             errorInfo = $dict({ @"HTTPAuthorization", authorization },
                               { @"HTTPAuthenticateHeader", authResponse });
         }
@@ -229,7 +229,7 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
         //otherwise, retryOrError will set the error and stop.
         [self retryOrError:TDStatusToNSErrorWithInfo(status, self.changesFeedURL, errorInfo)];
     }
-    
+
     if (TDStatusIsError(((NSHTTPURLResponse *)response).statusCode)) {
         [self finishedLoading];
     }
@@ -248,7 +248,7 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 {
     //parse the input buffer into JSON (or NSArray of changes?)
     CDTLogVerbose(CDTREPLICATION_LOG_CONTEXT, @"%@: didFinishLoading, %u bytes", self,
-                  (unsigned)self.inputBuffer.length);
+               (unsigned)self.inputBuffer.length);
     
     BOOL restart = NO;
     NSString* errorMessage = nil;
