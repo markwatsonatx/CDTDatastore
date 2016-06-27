@@ -18,6 +18,7 @@
 #import "TDReplicator.h"
 #import "TDPusher.h"
 #import "TDPuller.h"
+#import "TDPuller2.h"
 #import "TD_Database+Replication.h"
 #import "TDRemoteRequest.h"
 #import "TDAuthorizer.h"
@@ -80,7 +81,7 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
 
     // TDReplicator is an abstract class; instantiating one actually instantiates a subclass.
     if ([self class] == [TDReplicator class]) {
-        Class klass = push ? [TDPusher class] : [TDPuller class];
+        Class klass = push ? [TDPusher class] : [TDPuller2 class];
         return [[klass alloc] initWithDB:db
                                   remote:remote
                                     push:push
@@ -493,23 +494,6 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
     return YES;
 }
 
-// mw:start
-//- (BOOL)goOnline
-//{
-//    if (_online) return NO;
-//    CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Going online", self);
-//    _online = YES;
-//
-//    if (_running) {
-//        _lastSequence = nil;
-//        self.error = nil;
-//
-//        [self checkSession];
-//        [self postProgressChanged];
-//    }
-//    return YES;
-//}
-
 - (BOOL)goOnline
 {
     return [self goOnlineSkipCheckpoint:NO];
@@ -530,7 +514,6 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
     }
     return YES;
 }
-// mw:end
 
 - (void)reachabilityChanged:(TDReachability*)host
 {
@@ -613,40 +596,6 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
     // Remember that some revisions failed to transfer, so we can later retry.
     ++_revisionsFailed;
 }
-
-// Before doing anything else, determine whether we have an active login session.
-// mw:start
-//- (void)checkSession
-//{
-//    if (![_authorizer respondsToSelector:@selector(loginParametersForSite:)]) {
-//        [self fetchRemoteCheckpointDoc];
-//        return;
-//    }
-//
-//    // First check whether a session exists
-//    [self asyncTaskStarted];
-//    [self sendAsyncRequest:@"GET"
-//                      path:@"/_session"
-//                      body:nil
-//              onCompletion:^(id result, NSError* error) {
-//                  if (error) {
-//                      CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Session check failed: %@", self,
-//                              error);
-//                      self.error = error;
-//                  } else {
-//                      NSString* username = $castIf(
-//                          NSString, [[result objectForKey:@"userCtx"] objectForKey:@"name"]);
-//                      if (username) {
-//                          CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Active session, logged in as '%@'",
-//                                  self, username);
-//                          [self fetchRemoteCheckpointDoc];
-//                      } else {
-//                          [self login];
-//                      }
-//                  }
-//                  [self asyncTasksFinished:1];
-//              }];
-//}
 
 - (void)checkSession {
     [self checkSessionSkipCheckpoint:NO];

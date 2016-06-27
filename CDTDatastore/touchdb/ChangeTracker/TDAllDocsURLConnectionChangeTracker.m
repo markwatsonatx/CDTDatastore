@@ -1,5 +1,5 @@
 //
-//  TDURLConnectionChangeTracker.m
+//  TDAllDocsURLConnectionChangeTracker.m
 //
 //
 //  Created by Adam Cox on 1/5/15.
@@ -16,7 +16,7 @@
 // <http://wiki.apache.org/couchdb/HTTP_database_API#Changes>
 //
 
-#import "TDURLConnectionChangeTracker.h"
+#import "TDAllDocsURLConnectionChangeTracker.h"
 #import "TDRemoteRequest.h"
 #import "TDAuthorizer.h"
 #import "TDStatus.h"
@@ -32,7 +32,7 @@
 #define kMaxRetries 6
 #define kInitialRetryDelay 0.2
 
-@interface TDURLConnectionChangeTracker()
+@interface TDAllDocsURLConnectionChangeTracker()
 @property (strong, nonatomic) NSMutableData* inputBuffer;
 @property (strong, nonatomic) NSMutableURLRequest *request;
 @property (strong, nonatomic) NSDate* startTime;
@@ -41,7 +41,7 @@
 @property (nonatomic, strong) CDTURLSessionTask * task;
 @end
 
-@implementation TDURLConnectionChangeTracker
+@implementation TDAllDocsURLConnectionChangeTracker
 
 - (instancetype)initWithDatabaseURL:(NSURL *)databaseURL
                                mode:(TDChangeTrackerMode)mode
@@ -72,7 +72,7 @@
     CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Starting...", [self class]);
     [super start];
     
-    NSURL* url = self.changesFeedURL;
+    NSURL* url = self.allDocsURL;
     self.request = [[NSMutableURLRequest alloc] initWithURL:url];
     self.request.cachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
     self.request.HTTPMethod = @"GET";
@@ -227,7 +227,7 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
         
         //retryOrError will only retry if the error seems to be a transient error.
         //otherwise, retryOrError will set the error and stop.
-        [self retryOrError:TDStatusToNSErrorWithInfo(status, self.changesFeedURL, errorInfo)];
+        [self retryOrError:TDStatusToNSErrorWithInfo(status, self.allDocsURL, errorInfo)];
     }
     
     if (TDStatusIsError(((NSHTTPURLResponse *)response).statusCode)) {

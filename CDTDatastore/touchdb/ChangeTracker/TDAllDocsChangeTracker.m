@@ -1,5 +1,5 @@
 //
-//  TDChangeTracker.m
+//  TDAllDocsChangeTracker.m
 //  TouchDB
 //
 //  Created by Jens Alfke on 6/20/11.
@@ -17,9 +17,10 @@
 //
 // <http://wiki.apache.org/couchdb/HTTP_database_API#Changes>
 
-#import "TDChangeTracker.h"
-#import "TDURLConnectionChangeTracker.h"
+#import "TDAllDocsChangeTracker.h"
+#import "TDAllDocsURLConnectionChangeTracker.h"
 #import "TDAuthorizer.h"
+#import "TDChangeTracker.h"
 #import "TDMisc.h"
 #import "TDStatus.h"
 #import "TDJSON.h"
@@ -31,11 +32,11 @@
 #define kInitialRetryDelay 2.0  // Initial retry delay (doubles after every subsequent failure)
 #define kMaxRetryDelay 300.0    // ...but will never get longer than this
 
-@interface TDChangeTracker ()
+@interface TDAllDocsChangeTracker ()
 @property (readwrite, copy, nonatomic) id lastSequenceID;
 @end
 
-@implementation TDChangeTracker
+@implementation TDAllDocsChangeTracker
 
 @synthesize lastSequenceID = _lastSequenceID, databaseURL = _databaseURL, mode = _mode;
 @synthesize limit = _limit, heartbeat = _heartbeat, error = _error;
@@ -54,9 +55,9 @@
     NSParameterAssert(client);
     self = [super init];
     if (self) {
-        if ([self class] == [TDChangeTracker class]) {
-            // TDChangeTracker is abstract; instantiate a concrete subclass instead.
-            return [[TDURLConnectionChangeTracker alloc] initWithDatabaseURL:databaseURL
+        if ([self class] == [TDAllDocsChangeTracker class]) {
+            // TDAllDocsChangeTracker is abstract; instantiate a concrete subclass instead.
+            return [[TDAllDocsURLConnectionChangeTracker alloc] initWithDatabaseURL:databaseURL
                                                                         mode:mode
                                                                    conflicts:includeConflicts
                                                                 lastSequence:lastSequenceID
@@ -75,64 +76,12 @@
 
 - (NSString*)databaseName { return _databaseURL.path.lastPathComponent; }
 
-- (NSString*)changesFeedPath
+- (NSString*)allDocsPath
 {
-    static NSString* const kModeNames[3] = { @"normal", @"longpoll", @"continuous" };
-    NSMutableString* path;
-    path = [NSMutableString stringWithFormat:@"_changes?feed=%@&heartbeat=%.0f", kModeNames[_mode],
-            _heartbeat * 1000.0];
-    if (_includeConflicts) [path appendString:@"&style=all_docs"];
-    id seq = _lastSequenceID;
-    if (seq) {
-        // BigCouch is now using arrays as sequence IDs. These need to be sent back JSON-encoded.
-        if ([seq isKindOfClass:[NSArray class]] || [seq isKindOfClass:[NSDictionary class]])
-            seq = [TDJSON stringWithJSONObject:seq options:0 error:nil];
-        [path appendFormat:@"&since=%@", TDEscapeURLParam([seq description])];
-    }
-    if (_limit > 0) [path appendFormat:@"&limit=%u", _limit];
-    if (_filterName) {
-        [path appendFormat:@"&filter=%@", TDEscapeURLParam(_filterName)];
-        for (NSString* key in _filterParameters) {
-            NSString* value = _filterParameters[key];
-            if (![value isKindOfClass:[NSString class]]) {
-                // It's ambiguous whether non-string filter params are allowed.
-                // If we get one, encode it as JSON:
-                NSError* error;
-                value = [TDJSON stringWithJSONObject:value
-                                             options:TDJSONWritingAllowFragments
-                                               error:&error];
-                if (!value) {
-                    CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"Illegal filter parameter %@ = %@", key,
-                               _filterParameters[key]);
-                    continue;
-                }
-            }
-            [path appendFormat:@"&%@=%@", TDEscapeURLParam(key), TDEscapeURLParam(value)];
-        }
-    }
-    
-    if (_docIDs) {
-        if (_filterName) {
-            CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"You can't set both a replication filter and "
-                       @"doc_ids, since doc_ids uses the internal _doc_ids "
-                       @"filter.");
-        } else {
-            NSError* error;
-            NSString* docIDsParam = [TDJSON stringWithJSONObject:_docIDs
-                                                         options:TDJSONWritingAllowFragments
-                                                           error:&error];
-            if (!docIDsParam || error) {
-                CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"Illegal doc IDs %@, %@", [_docIDs description],
-                           [error localizedDescription]);
-            }
-            [path appendFormat:@"&filter=_doc_ids&doc_ids=%@", TDEscapeURLParam(docIDsParam)];
-        }
-    }
-    
-    return path;
+    return @"_all_docs";
 }
 
-- (NSURL*)changesFeedURL { return TDAppendToURL(_databaseURL, self.changesFeedPath); }
+- (NSURL*)allDocsURL { return TDAppendToURL(_databaseURL, self.allDocsPath); }
 
 - (NSString*)description
 {
@@ -145,7 +94,7 @@
 {
     CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Server error: %@", self, message);
     self.error =
-    [NSError errorWithDomain:@"TDChangeTracker" code:kTDStatusUpstreamError userInfo:nil];
+    [NSError errorWithDomain:@"TDAllDocsChangeTracker" code:kTDStatusUpstreamError userInfo:nil];
 }
 
 - (BOOL)start
@@ -247,10 +196,20 @@
         return -1;
     }
     NSDictionary* changeDict = $castIf(NSDictionary, changeObj);
-    NSArray* changes = $castIf(NSArray, changeDict[@"results"]);
-    if (!changes) {
-        *errorMessage = @"No 'changes' array in response";
+    NSArray* rows = $castIf(NSArray, changeDict[@"rows"]);
+    if (!rows) {
+        *errorMessage = @"No 'rows' array in response";
         return -1;
+    }
+    NSMutableArray *changes = [[NSMutableArray alloc] init];
+    for(NSDictionary *row in rows) {
+        NSDictionary *rowValue = (NSDictionary *)[row objectForKey:@"value"];
+        NSMutableDictionary *change = @{
+                                        @"id":[row objectForKey:@"id"],
+                                        @"seq":[rowValue objectForKey:@"rev"],
+                                        @"changes": @[@{@"rev": [rowValue objectForKey:@"rev"]}]
+                                        };
+        [changes addObject:change];
     }
     if (![self receivedChanges:changes errorMessage:errorMessage]) return -1;
     return changes.count;

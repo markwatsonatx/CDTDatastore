@@ -1,5 +1,5 @@
 //
-//  TDPuller.m
+//  TDPuller2.m
 //  TouchDB
 //
 //  Created by Jens Alfke on 12/2/11.
@@ -16,9 +16,11 @@
 //  and limitations under the License.
 
 #import "TDPuller.h"
+#import "TDPuller2.h"
 #import "TD_Database+Insertion.h"
 #import "TD_Database+Replication.h"
 #import "TD_Revision.h"
+#import "TDAllDocsChangeTracker.h"
 #import "TDChangeTracker.h"
 #import "TDAuthorizer.h"
 #import "TDBatcher.h"
@@ -48,12 +50,12 @@
 // Maximum number of revision IDs to pass in an "?atts_since=" query param
 #define kMaxNumberOfAttsSince 50u
 
-@interface TDPuller () <TDChangeTrackerClient>
+@interface TDPuller2 () <TDChangeTrackerClient>
 @end
 
 static NSString* joinQuotedEscaped(NSArray* strings);
 
-@implementation TDPuller
+@implementation TDPuller2
 
 
 - (instancetype)initWithDB:(TD_Database*)db
@@ -81,14 +83,14 @@ static NSString* joinQuotedEscaped(NSArray* strings);
     // _bulk_get check starts an async task
     [self asyncTaskStarted];
     
-    __weak TDPuller* weakSelf = self;
+    __weak TDPuller2* weakSelf = self;
     // check to see if _bulk_get endpoint is supported and then start replication
     [self sendAsyncRequest:@"GET"
                       path:@"_bulk_get"
                       body:nil
               onCompletion:^(id result, NSError* error) {
                   
-                  __strong TDPuller* strongSelf = weakSelf;
+                  __strong TDPuller2* strongSelf = weakSelf;
                   
                   switch(error.code) {
                       case 404:
@@ -143,7 +145,7 @@ static NSString* joinQuotedEscaped(NSArray* strings);
     
     CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@ starting ChangeTracker: mode=%d, since=%@", self, mode,
                _lastSequence);
-    _changeTracker = [[TDChangeTracker alloc] initWithDatabaseURL:_remote
+    _changeTracker = [[TDAllDocsChangeTracker alloc] initWithDatabaseURL:_remote
                                                              mode:mode
                                                         conflicts:YES
                                                      lastSequence:_lastSequence
@@ -217,7 +219,7 @@ static NSString* joinQuotedEscaped(NSArray* strings);
 
 - (BOOL)goOnline
 {
-    if ([super goOnline]) return YES;
+    if ([super goOnlineSkipCheckpoint:YES]) return YES;
     // If we were already online (i.e. server is reachable) but got a reachability-change event,
     // tell the tracker to retry in case it's in retry mode after a transient failure. (I.e. the
     // state of the network might be better now.)
@@ -257,7 +259,7 @@ static NSString* joinQuotedEscaped(NSArray* strings);
                     [[TDPulledRevision alloc] initWithDocID:docID revID:revID deleted:deleted];
                     // Remember its remote sequence ID (opaque), and make up a numeric sequence
                     // based on the order in which it appeared in the _changes feed:
-                    rev.remoteSequenceID = remoteSequenceID;
+                    rev.remoteSequenceID = rev.revID;
                     if (changes.count > 1) rev.conflicted = true;
                     CDTLogVerbose(CDTREPLICATION_LOG_CONTEXT, @"%@: Received #%@ %@", self,
                                   remoteSequenceID, rev);
@@ -324,7 +326,6 @@ static NSString* joinQuotedEscaped(NSArray* strings);
         CDTLogVerbose(CDTREPLICATION_LOG_CONTEXT, @"%@: no new remote revisions to fetch", self);
         SequenceNumber seq = [_pendingSequences addValue:lastInboxSequence];
         [_pendingSequences removeSequence:seq];
-        self.lastSequence = _pendingSequences.checkpointedValue;
         return;
     }
     
@@ -334,11 +335,11 @@ static NSString* joinQuotedEscaped(NSArray* strings);
     // Dump the revs into the queues of revs to pull from the remote db:
     unsigned numBulked = 0;
     for (TDPulledRevision* rev in inbox.allRevisions) {
-        if (!_bulkGetSupported && rev.generation == 1 && !rev.deleted && !rev.conflicted) {
-            // Optimistically pull 1st-gen revs in bulk:
+        if (!_bulkGetSupported) {
             [_bulkRevsToPull addObject:rev];
             ++numBulked;
-        } else {
+        }
+        else {
             [self queueRemoteRevision:rev];
         }
         rev.sequence = [_pendingSequences addValue:rev.remoteSequenceID];
@@ -428,13 +429,13 @@ static NSString* joinQuotedEscaped(NSArray* strings);
     
     // Under ARC, using variable dl directly in the block given as an argument to initWithURL:...
     // results in compiler error (could be undefined variable)
-    __weak TDPuller* weakSelf = self;
+    __weak TDPuller2* weakSelf = self;
     TDMultipartDownloader* dl;
     dl = [[TDMultipartDownloader alloc] initWithSession:self.session URL:TDAppendToURL(_remote, path)
                                                database:_db
                                          requestHeaders:self.requestHeaders
                                            onCompletion:^(TDMultipartDownloader* dl, NSError* error) {
-                                               __strong TDPuller* strongSelf = weakSelf;
+                                               __strong TDPuller2* strongSelf = weakSelf;
                                                // OK, now we've got the response revision:
                                                if (error) {
                                                    strongSelf.error = error;
@@ -486,13 +487,13 @@ static NSString* joinQuotedEscaped(NSArray* strings);
     
     NSDictionary *requestBody = @{@"docs": keys};
     NSMutableArray* remainingRevs = [bulkRevs mutableCopy];
-    __weak TDPuller* weakSelf = self;
+    __weak TDPuller2* weakSelf = self;
     
     [self sendAsyncRequest:@"POST"
                       path:@"_bulk_get?revs=true&attachments=true"
                       body:requestBody
               onCompletion:^(id result, NSError* error) {
-                  __strong TDPuller* strongSelf = weakSelf;
+                  __strong TDPuller2* strongSelf = weakSelf;
                   if (error) {
                       strongSelf.error = error;
                       [strongSelf revisionFailed];
@@ -617,13 +618,6 @@ static NSString* joinQuotedEscaped(NSArray* strings);
             {
                 SequenceNumber fakeSequence = rev.sequence;
                 NSArray* history = [TD_Database parseCouchDBRevisionHistory:rev.properties];
-                if (!history && rev.generation > 1) {
-                    CDTLogWarn(CDTREPLICATION_LOG_CONTEXT,
-                               @"%@: Missing revision history in response for %@", self, rev);
-                    self.error = TDStatusToNSError(kTDStatusUpstreamError, nil);
-                    [self revisionFailed];
-                    continue;
-                }
                 CDTLogVerbose(CDTREPLICATION_LOG_CONTEXT, @"%@ inserting %@ %@", self, rev.docID,
                               [history my_compactDescription]);
                 
@@ -650,9 +644,6 @@ static NSString* joinQuotedEscaped(NSArray* strings);
         CDTLogVerbose(CDTREPLICATION_LOG_CONTEXT, @"%@ finished inserting %u revisions", self,
                       (unsigned)downloads.count);
         
-        // Checkpoint:
-        self.lastSequence = _pendingSequences.checkpointedValue;
-        
         //        success = YES;
     }
     @catch (NSException* x) { MYReportException(x, @"%@: Exception inserting revisions", self); }
@@ -667,14 +658,6 @@ static NSString* joinQuotedEscaped(NSArray* strings);
     self.changesProcessed += downloads.count;
     [self asyncTasksFinished:downloads.count];
 }
-
-@end
-
-#pragma mark -
-
-@implementation TDPulledRevision
-
-@synthesize remoteSequenceID = _remoteSequenceID, conflicted = _conflicted;
 
 @end
 

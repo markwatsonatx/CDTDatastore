@@ -1,5 +1,5 @@
 //
-//  TDPuller.h
+//  TDPuller2.h
 //  TouchDB
 //
 //  Created by Jens Alfke on 12/2/11.
@@ -10,12 +10,12 @@
 
 #import "TDReplicator.h"
 #import "TD_Revision.h"
-@class TDChangeTracker, TDSequenceMap;
+@class TDAllDocsChangeTracker, TDSequenceMap;
 
 /** Replicator that pulls from a remote CouchDB. */
-@interface TDPuller : TDReplicator {
+@interface TDPuller2 : TDReplicator {
 @private
-    TDChangeTracker* _changeTracker;
+    TDAllDocsChangeTracker* _changeTracker;
     BOOL _caughtUp;                      // Have I received all current _changes entries?
     TDSequenceMap* _pendingSequences;    // Received but not yet copied into local DB
     NSMutableArray* _revsToPull;         // Queue of TDPulledRevisions to download
@@ -27,17 +27,5 @@
 }
 
 @property BOOL bulkGetSupported;
-
-@end
-
-/** A revision received from a remote server during a pull. Tracks the opaque remote sequence ID. */
-@interface TDPulledRevision : TD_Revision {
-@private
-    id _remoteSequenceID;
-    bool _conflicted;
-}
-
-@property (copy) id remoteSequenceID;
-@property bool conflicted;
 
 @end

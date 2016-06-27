@@ -1,5 +1,5 @@
 //
-//  TDChangeTracker.h
+//  TDAllDocsChangeTracker.h
 //  TouchDB
 //
 //  Created by Jens Alfke on 6/20/11.
@@ -15,21 +15,13 @@
 
 #import <Foundation/Foundation.h>
 #import "CDTURLSession.h"
-@class TDChangeTracker;
+#import "TDChangeTracker.h"
+@class TDAllDocsChangeTracker;
 @protocol TDAuthorizer;
-
-@protocol TDChangeTrackerClient <NSObject>
-@optional
-- (void)changeTrackerReceivedChange:(NSDictionary*)change;
-- (void)changeTrackerReceivedChanges:(NSArray*)changes;
-- (void)changeTrackerStopped:(TDChangeTracker*)tracker;
-@end
-
-typedef enum TDChangeTrackerMode { kOneShot, kLongPoll, kContinuous } TDChangeTrackerMode;
 
 /** Reads the continuous-mode _changes feed of a database, and sends the individual change entries
  * to its client.  */
-@interface TDChangeTracker : NSObject {
+@interface TDAllDocsChangeTracker : NSObject {
 @protected
     NSURL* _databaseURL;
     id<TDChangeTrackerClient> __weak _client;
@@ -55,7 +47,7 @@ typedef enum TDChangeTrackerMode { kOneShot, kLongPoll, kContinuous } TDChangeTr
 
 @property (readonly, nonatomic) NSURL* databaseURL;
 @property (readonly, nonatomic) NSString* databaseName;
-@property (readonly) NSURL* changesFeedURL;
+@property (readonly) NSURL* allDocsURL;
 @property (readonly, copy, nonatomic) id lastSequenceID;
 @property (strong, nonatomic) NSError* error;
 @property (weak, nonatomic) id<TDChangeTrackerClient> client;
@@ -78,7 +70,7 @@ typedef enum TDChangeTrackerMode { kOneShot, kLongPoll, kContinuous } TDChangeTr
 - (void)retry;
 
 // Protected
-@property (readonly) NSString* changesFeedPath;
+@property (readonly) NSString* allDocsPath;
 - (void)setUpstreamError:(NSString*)message;
 - (void)failedWithError:(NSError*)error;
 - (NSInteger)receivedPollResponse:(NSData*)body errorMessage:(NSString**)errorMessage;
