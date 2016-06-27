@@ -76,6 +76,7 @@
 @interface SimpleHttpServer : NSObject
 
 @property int listenSocketFd;
+@property bool stopped;
 @property NSString *header;
 
 @end
@@ -93,6 +94,9 @@
 // Start a simple HTTP server on localhost that responds to any message with a "404 Not Found".
 - (void)start {
     self.listenSocketFd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    int yes = 1;
+    setsockopt(self.listenSocketFd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+    self.stopped = false;
     const int buf_size = 1024;
     
     struct sockaddr_in serv_addr;
@@ -101,14 +105,13 @@
     serv_addr.sin_port = htons(8080);
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     
-    bind(self.listenSocketFd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
-    listen(self.listenSocketFd, 10);
+    int resb = bind(self.listenSocketFd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
+    int resl = listen(self.listenSocketFd, 10);
     
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
-        bool stopped = false;
-        while (!stopped)
+        while (!self.stopped)
         {
-            __block int connfd = accept(self.listenSocketFd, (struct sockaddr*)NULL, NULL);
+            int connfd = accept(self.listenSocketFd, (struct sockaddr*)NULL, NULL);
             if (connfd > 0) {
                 char buffer[buf_size];
                 bzero(buffer, buf_size);
@@ -121,14 +124,15 @@
                 write(connfd, header, strlen(header));
                 close(connfd);
             } else {
-                stopped = true;
+                self.stopped = true;
             }
         }
     });
 }
 
 - (void)stop {
-    close(self.listenSocketFd);
+    self.stopped = true;
+    int resc = close(self.listenSocketFd);
 }
 
 @end
@@ -152,7 +156,8 @@
     // check the underlying source to make sure it doesn't contain the userinfo
     // and check that the interceptors list contains the cookie interceptor.
     XCTAssertEqualObjects(@"http://example.com", pull.source.absoluteString);
-    XCTAssertEqual(pull.httpInterceptors.count, 1);
+    // 2 interceptors - because the 429 backoff interceptor is also present
+    XCTAssertEqual(pull.httpInterceptors.count, 2);
     XCTAssertEqualObjects([pull.httpInterceptors[0] class], [CDTSessionCookieInterceptor class]);
 }
 
@@ -167,7 +172,8 @@
     // check the underlying source to make sure it doesn't contain the userinfo
     // and check that the interceptors list contains the cookie interceptor.
     XCTAssertEqualObjects(@"http://example.com", push.target.absoluteString);
-    XCTAssertEqual(push.httpInterceptors.count, 1);
+    // 2 interceptors - because the 429 backoff interceptor is also present
+    XCTAssertEqual(push.httpInterceptors.count, 2);
     XCTAssertEqualObjects([push.httpInterceptors[0] class], [CDTSessionCookieInterceptor class]);
 }
 
@@ -242,13 +248,6 @@
 -(void)testDictionaryForPullReplicationDocument
 {
     NSString *remoteUrl = @"https://myaccount.cloudant.com/mydb";
-    NSDictionary *expectedDictionary = @{
-        @"target" : @"test_database",
-        @"source" : remoteUrl,
-        @"filter" : @"myddoc/myfilter",
-        @"query_params" : @{@"min" : @23, @"max" : @43},
-        @"interceptors" : @[]
-    };
 
     NSError *error;
     CDTDatastore *tmp = [self.factory datastoreNamed:@"test_database" error:&error];
@@ -257,6 +256,14 @@
     
     pull.filter = @"myddoc/myfilter";
     pull.filterParams = @{@"min":@23, @"max":@43};
+    
+    NSDictionary *expectedDictionary = @{
+                                         @"target" : @"test_database",
+                                         @"source" : remoteUrl,
+                                         @"filter" : @"myddoc/myfilter",
+                                         @"query_params" : @{@"min" : @23, @"max" : @43},
+                                         @"interceptors" : pull.httpInterceptors
+                                         };
     
     error = nil;
     NSDictionary *pullDict = [pull dictionaryForReplicatorDocument:&error];
@@ -277,18 +284,18 @@
 -(void)testDictionaryForPushReplicationDocument
 {
     NSString *remoteUrl = @"https://myaccount.cloudant.com/mydb";
-    NSDictionary *expectedDictionary =
-        @{ @"source" : @"test_database",
-           @"target" : remoteUrl,
-           @"interceptors" : @[] };
-
+ 
     NSError *error;
     CDTDatastore *tmp = [self.factory datastoreNamed:@"test_database" error:&error];
     
     CDTPushReplication *push = [CDTPushReplication replicationWithSource:tmp
                                                                   target:[NSURL URLWithString:remoteUrl]];
 
-    
+    NSDictionary *expectedDictionary =
+    @{ @"source" : @"test_database",
+       @"target" : remoteUrl,
+       @"interceptors" : push.httpInterceptors };
+   
     error = nil;
     NSDictionary *pushDict = [push dictionaryForReplicatorDocument:&error];
     XCTAssertNil(error, @"Error creating dictionary. %@. Replicator: %@", error, push);
