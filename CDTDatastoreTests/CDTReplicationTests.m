@@ -78,15 +78,18 @@
 @property int listenSocketFd;
 @property bool stopped;
 @property NSString *header;
+@property int port;
 
 @end
 
 @implementation SimpleHttpServer
 
 - (id)initWithHeader:(NSString*)header
+                port:(int)port
 {
     if (self = [super init]) {
         self.header = header;
+        self.port = port;
     }
     return self;
 }
@@ -102,7 +105,7 @@
     struct sockaddr_in serv_addr;
     memset(&serv_addr, '0', sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(8080);
+    serv_addr.sin_port = htons(self.port);
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     
     int resb = bind(self.listenSocketFd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
@@ -181,9 +184,11 @@
 {
     NSError *error;
     // simple remote to send 429
-    SimpleHttpServer *server = [[SimpleHttpServer alloc] initWithHeader:@"HTTP/1.0 429 Too Many Requests\r\n\r\n"];
+    int port = 9999;
+    SimpleHttpServer *server = [[SimpleHttpServer alloc] initWithHeader:@"HTTP/1.0 429 Too Many Requests\r\n\r\n"
+                                                                   port:port];
     [server start];
-    NSString *remoteUrl = @"http://127.0.0.1:8080";
+    NSString *remoteUrl = [NSString stringWithFormat:@"http://127.0.0.1:%d", port];
     
     CDTDatastore *tmp = [self.factory datastoreNamed:@"test_database" error:&error];
     CDTPullReplication *pull =
@@ -213,9 +218,11 @@
     // We can't use OHHTTPStubs to stub the server as that doesn't work with background
     // requests, so we just start a simple local server that returns 404 to anything it receives
     // and use that for our remote.
-    SimpleHttpServer *server = [[SimpleHttpServer alloc] initWithHeader:@"HTTP/1.0 404 Not Found\r\n\r\n"];
+    int port = 9999;
+    SimpleHttpServer *server = [[SimpleHttpServer alloc] initWithHeader:@"HTTP/1.0 404 Not Found\r\n\r\n"
+                                                                   port:port];
     [server start];
-    NSString *remoteUrl = @"http://127.0.0.1:8080";
+    NSString *remoteUrl = [NSString stringWithFormat:@"http://127.0.0.1:%d", port];
 
     CDTDatastore *tmp = [self.factory datastoreNamed:@"test_database" error:&error];
     CDTPullReplication *pull =
