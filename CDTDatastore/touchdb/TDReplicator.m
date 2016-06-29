@@ -503,6 +503,7 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
     if (_running) {
         _lastSequence = nil;
         self.error = nil;
+
         [self checkSession];
         [self postProgressChanged];
     }
@@ -591,7 +592,8 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
     ++_revisionsFailed;
 }
 
-- (void)checkSession {
+- (void)checkSession
+{
     if (![_authorizer respondsToSelector:@selector(loginParametersForSite:)]) {
         [self fetchRemoteCheckpointDoc];
         return;
