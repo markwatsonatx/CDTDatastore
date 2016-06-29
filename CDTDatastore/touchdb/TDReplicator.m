@@ -496,11 +496,6 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
 
 - (BOOL)goOnline
 {
-    return [self goOnlineSkipCheckpoint:NO];
-}
-
-- (BOOL)goOnlineSkipCheckpoint:(BOOL)skipCheckpoint
-{
     if (_online) return NO;
     CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Going online", self);
     _online = YES;
@@ -508,7 +503,7 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
     if (_running) {
         _lastSequence = nil;
         self.error = nil;
-        [self checkSessionSkipCheckpoint:skipCheckpoint];
+        [self checkSession];
         [self postProgressChanged];
     }
     return YES;
@@ -597,18 +592,8 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
 }
 
 - (void)checkSession {
-    [self checkSessionSkipCheckpoint:NO];
-}
-
-- (void)checkSessionSkipCheckpoint:(BOOL)skipCheckpoint
-{
     if (![_authorizer respondsToSelector:@selector(loginParametersForSite:)]) {
-        if (skipCheckpoint) {
-            [self beginReplicating];
-        }
-        else {
-            [self fetchRemoteCheckpointDoc];
-        }
+        [self fetchRemoteCheckpointDoc];
         return;
     }
 
@@ -628,12 +613,7 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
                       if (username) {
                           CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Active session, logged in as '%@'",
                                   self, username);
-                          if (skipCheckpoint) {
-                              [self beginReplicating];
-                          }
-                          else {
-                              [self fetchRemoteCheckpointDoc];
-                          }
+                          [self fetchRemoteCheckpointDoc];
                       } else {
                           [self login];
                       }

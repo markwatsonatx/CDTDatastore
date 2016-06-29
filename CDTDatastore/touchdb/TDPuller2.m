@@ -219,7 +219,7 @@ static NSString* joinQuotedEscaped(NSArray* strings);
 
 - (BOOL)goOnline
 {
-    if ([super goOnlineSkipCheckpoint:YES]) return YES;
+    if ([super goOnline]) return YES;
     // If we were already online (i.e. server is reachable) but got a reachability-change event,
     // tell the tracker to retry in case it's in retry mode after a transient failure. (I.e. the
     // state of the network might be better now.)
@@ -605,6 +605,26 @@ static NSString* joinQuotedEscaped(NSArray* strings);
 // This will be called when _downloadsToInsert fills up:
 - (void)insertDownloads:(NSArray*)downloads
 {
+    
+    // Get all docs in the local database to see which ones need to be deleted
+    NSDictionary *allDocs = [self.db getAllDocs:nil];
+    NSLog(@"ALLDOCS = %@", allDocs);
+    NSLog(@"lastSequence = %@", _lastSequence);
+    
+//    // in TDPusher, _lastSequence is always an NSNumber
+//    NSNumber *maxPendingSequence = [(NSNumber*)_lastSequence longLongValue];
+//    
+//    // Include conflicts so all conflicting revisions are replicated too
+//    TDChangesOptions options = kDefaultTDChangesOptions;
+//    options.includeConflicts = YES;
+//    // Process existing changes since the last push:
+//    [self addRevsToInbox:[_db changesSinceSequence:_maxPendingSequence
+//                                           options:&options
+//                                            filter:self.filter
+//                                            params:_filterParameters]];
+//    [_batcher flush];  // process up to the first 100 revs
+    
+    
     CDTLogVerbose(CDTREPLICATION_LOG_CONTEXT, @"%@ inserting %u revisions...", self,
                   (unsigned)downloads.count);
     CFAbsoluteTime time = CFAbsoluteTimeGetCurrent();

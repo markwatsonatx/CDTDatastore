@@ -36,12 +36,12 @@
     if (self = [super init]) {
         
         NSURLComponents * targetComponents = [NSURLComponents componentsWithURL:target resolvingAgainstBaseURL:NO];
-        if(targetComponents.user && targetComponents.password){
-            CDTSessionCookieInterceptor * cookieInterceptor = [[CDTSessionCookieInterceptor alloc] initWithUsername:targetComponents.user password:targetComponents.password];
-            targetComponents.user = nil;
-            targetComponents.password = nil;
-            [self addInterceptor:cookieInterceptor];
-        }
+//        if(targetComponents.user && targetComponents.password){
+//            CDTSessionCookieInterceptor * cookieInterceptor = [[CDTSessionCookieInterceptor alloc] initWithUsername:targetComponents.user password:targetComponents.password];
+//            targetComponents.user = nil;
+//            targetComponents.password = nil;
+//            [self addInterceptor:cookieInterceptor];
+//        }
         
         _source = source;
         _target = targetComponents.URL;
