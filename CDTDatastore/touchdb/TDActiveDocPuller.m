@@ -16,11 +16,12 @@
 //  and limitations under the License.
 
 #import "TDPuller.h"
-#import "TDPuller2.h"
+#import "CDTActiveDocFetcherDelegate.h"
+#import "TDActiveDocPuller.h"
 #import "TD_Database+Insertion.h"
 #import "TD_Database+Replication.h"
 #import "TD_Revision.h"
-#import "TDAllDocsChangeTracker.h"
+#import "TDActiveDocChangeTracker.h"
 #import "TDChangeTracker.h"
 #import "TDAuthorizer.h"
 #import "TDBatcher.h"
@@ -50,12 +51,15 @@
 // Maximum number of revision IDs to pass in an "?atts_since=" query param
 #define kMaxNumberOfAttsSince 50u
 
-@interface TDPuller2 () <TDChangeTrackerClient>
+@interface TDActiveDocPuller () <TDChangeTrackerClient> {
+    id<CDTActiveDocFetcherDelegate> _activeDocFetcher;
+}
+
 @end
 
 static NSString* joinQuotedEscaped(NSArray* strings);
 
-@implementation TDPuller2
+@implementation TDActiveDocPuller
 
 
 - (instancetype)initWithDB:(TD_Database*)db
@@ -63,14 +67,17 @@ static NSString* joinQuotedEscaped(NSArray* strings);
                       push:(BOOL)push
                 continuous:(BOOL)continuous
               interceptors:(NSArray*)interceptors
+     pullActiveDocStrategy:(BOOL)pullActiveDocStrategy
+      pullActiveDocFetcher:(id<CDTActiveDocFetcherDelegate>)pullActiveDocFetcher
 {
-    if (self = [super initWithDB:db remote:remote push:push continuous:continuous interceptors:interceptors])
+    if (self = [super initWithDB:db remote:remote push:push continuous:continuous interceptors:interceptors pullActiveDocStrategy:pullActiveDocStrategy pullActiveDocFetcher:pullActiveDocFetcher])
     {
         NSUInteger initialRevsCapacity = 100;
         _deletedRevsToPull = [[NSMutableArray alloc] initWithCapacity:initialRevsCapacity];
         _revsToPull = [[NSMutableArray alloc] initWithCapacity:initialRevsCapacity];
         _bulkGetRevs = [[NSMutableArray alloc] initWithCapacity:initialRevsCapacity];
         _bulkRevsToPull = [[NSMutableArray alloc] initWithCapacity:initialRevsCapacity];
+        _activeDocFetcher = pullActiveDocFetcher;
     }
     return self;
 }
@@ -83,14 +90,14 @@ static NSString* joinQuotedEscaped(NSArray* strings);
     // _bulk_get check starts an async task
     [self asyncTaskStarted];
     
-    __weak TDPuller2* weakSelf = self;
+    __weak TDActiveDocPuller* weakSelf = self;
     // check to see if _bulk_get endpoint is supported and then start replication
     [self sendAsyncRequest:@"GET"
                       path:@"_bulk_get"
                       body:nil
               onCompletion:^(id result, NSError* error) {
                   
-                  __strong TDPuller2* strongSelf = weakSelf;
+                  __strong TDActiveDocPuller* strongSelf = weakSelf;
                   
                   switch(error.code) {
                       case 404:
@@ -145,12 +152,13 @@ static NSString* joinQuotedEscaped(NSArray* strings);
     
     CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@ starting ChangeTracker: mode=%d, since=%@", self, mode,
                _lastSequence);
-    _changeTracker = [[TDAllDocsChangeTracker alloc] initWithDatabaseURL:_remote
+    _changeTracker = [[TDActiveDocChangeTracker alloc] initWithDatabaseURL:_remote
                                                              mode:mode
                                                         conflicts:YES
                                                      lastSequence:_lastSequence
                                                            client:self
-                                                          session:self.session];
+                                                          session:self.session
+                                                         activeDocFetcher:_activeDocFetcher];
     // Limit the number of changes to return, so we can parse the feed in parts:
     _changeTracker.limit = kChangesFeedLimit;
     _changeTracker.filterName = _filterName;
@@ -322,6 +330,7 @@ static NSString* joinQuotedEscaped(NSArray* strings);
             }
         }
         if (! found) {
+            NSLog(@"Deleting document with id %@", dbDocId);
             TDStatus status;
             TD_Revision *td_revision = [[TD_Revision alloc] initWithDocID:dbDocId revID:nil deleted:YES];
             TD_Revision *new = [self.db putRevision:td_revision
@@ -451,13 +460,13 @@ static NSString* joinQuotedEscaped(NSArray* strings);
     
     // Under ARC, using variable dl directly in the block given as an argument to initWithURL:...
     // results in compiler error (could be undefined variable)
-    __weak TDPuller2* weakSelf = self;
+    __weak TDActiveDocPuller* weakSelf = self;
     TDMultipartDownloader* dl;
     dl = [[TDMultipartDownloader alloc] initWithSession:self.session URL:TDAppendToURL(_remote, path)
                                                database:_db
                                          requestHeaders:self.requestHeaders
                                            onCompletion:^(TDMultipartDownloader* dl, NSError* error) {
-                                               __strong TDPuller2* strongSelf = weakSelf;
+                                               __strong TDActiveDocPuller* strongSelf = weakSelf;
                                                // OK, now we've got the response revision:
                                                if (error) {
                                                    strongSelf.error = error;
@@ -509,13 +518,13 @@ static NSString* joinQuotedEscaped(NSArray* strings);
     
     NSDictionary *requestBody = @{@"docs": keys};
     NSMutableArray* remainingRevs = [bulkRevs mutableCopy];
-    __weak TDPuller2* weakSelf = self;
+    __weak TDActiveDocPuller* weakSelf = self;
     
     [self sendAsyncRequest:@"POST"
                       path:@"_bulk_get?revs=true&attachments=true"
                       body:requestBody
               onCompletion:^(id result, NSError* error) {
-                  __strong TDPuller2* strongSelf = weakSelf;
+                  __strong TDActiveDocPuller* strongSelf = weakSelf;
                   if (error) {
                       strongSelf.error = error;
                       [strongSelf revisionFailed];

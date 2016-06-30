@@ -17,8 +17,10 @@
 //
 // <http://wiki.apache.org/couchdb/HTTP_database_API#Changes>
 
-#import "TDAllDocsChangeTracker.h"
-#import "TDAllDocsURLConnectionChangeTracker.h"
+#import "CDTActiveDoc.h"
+#import "CDTActiveDocFetcherDelegate.h"
+#import "TDActiveDocChangeTracker.h"
+#import "TDActiveDocURLConnectionChangeTracker.h"
 #import "TDAuthorizer.h"
 #import "TDChangeTracker.h"
 #import "TDMisc.h"
@@ -32,11 +34,11 @@
 #define kInitialRetryDelay 2.0  // Initial retry delay (doubles after every subsequent failure)
 #define kMaxRetryDelay 300.0    // ...but will never get longer than this
 
-@interface TDAllDocsChangeTracker ()
+@interface TDActiveDocChangeTracker ()
 @property (readwrite, copy, nonatomic) id lastSequenceID;
 @end
 
-@implementation TDAllDocsChangeTracker
+@implementation TDActiveDocChangeTracker
 
 @synthesize lastSequenceID = _lastSequenceID, databaseURL = _databaseURL, mode = _mode;
 @synthesize limit = _limit, heartbeat = _heartbeat, error = _error;
@@ -50,19 +52,21 @@
              lastSequence:(id)lastSequenceID
                    client:(id<TDChangeTrackerClient>)client
                   session:(CDTURLSession*)session
+         activeDocFetcher:(id<CDTActiveDocFetcherDelegate>)activeDocFetcher
 {
     NSParameterAssert(databaseURL);
     NSParameterAssert(client);
     self = [super init];
     if (self) {
-        if ([self class] == [TDAllDocsChangeTracker class]) {
+        if ([self class] == [TDActiveDocChangeTracker class]) {
             // TDAllDocsChangeTracker is abstract; instantiate a concrete subclass instead.
-            return [[TDAllDocsURLConnectionChangeTracker alloc] initWithDatabaseURL:databaseURL
+            return [[TDActiveDocURLConnectionChangeTracker alloc] initWithDatabaseURL:databaseURL
                                                                         mode:mode
                                                                    conflicts:includeConflicts
                                                                 lastSequence:lastSequenceID
                                                                       client:client
-                                                                     session:session];
+                                                                     session:session
+                                                                     activeDocFetcher:activeDocFetcher];
         }
         _databaseURL = databaseURL;
         _client = client;
@@ -94,7 +98,7 @@
 {
     CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Server error: %@", self, message);
     self.error =
-    [NSError errorWithDomain:@"TDAllDocsChangeTracker" code:kTDStatusUpstreamError userInfo:nil];
+    [NSError errorWithDomain:@"TDActiveDocChangeTracker" code:kTDStatusUpstreamError userInfo:nil];
 }
 
 - (BOOL)start
@@ -183,36 +187,36 @@
     return YES;
 }
 
-- (NSInteger)receivedPollResponse:(NSData*)body errorMessage:(NSString**)errorMessage
-{
-    if (!body) {
-        *errorMessage = @"No body in response";
-        return -1;
-    }
-    NSError* error;
-    id changeObj = [TDJSON JSONObjectWithData:body options:0 error:&error];
-    if (!changeObj) {
-        *errorMessage = $sprintf(@"JSON parse error: %@", error.localizedDescription);
-        return -1;
-    }
-    NSDictionary* changeDict = $castIf(NSDictionary, changeObj);
-    NSArray* rows = $castIf(NSArray, changeDict[@"rows"]);
-    if (!rows) {
-        *errorMessage = @"No 'rows' array in response";
-        return -1;
-    }
-    NSMutableArray *changes = [[NSMutableArray alloc] init];
-    for(NSDictionary *row in rows) {
-        NSDictionary *rowValue = (NSDictionary *)[row objectForKey:@"value"];
-        NSMutableDictionary *change = @{
-                                        @"id":[row objectForKey:@"id"],
-                                        @"seq":[rowValue objectForKey:@"rev"],
-                                        @"changes": @[@{@"rev": [rowValue objectForKey:@"rev"]}]
-                                        };
-        [changes addObject:change];
-    }
-    if (![self receivedChanges:changes errorMessage:errorMessage]) return -1;
-    return changes.count;
-}
+//- (NSArray *)receivedPollResponse:(NSData*)body errorMessage:(NSString**)errorMessage
+//{
+//    if (!body) {
+//        *errorMessage = @"No body in response";
+//        return -1;
+//    }
+//    NSError* error;
+//    id changeObj = [TDJSON JSONObjectWithData:body options:0 error:&error];
+//    if (!changeObj) {
+//        *errorMessage = $sprintf(@"JSON parse error: %@", error.localizedDescription);
+//        return -1;
+//    }
+//    NSDictionary* changeDict = $castIf(NSDictionary, changeObj);
+//    NSArray* rows = $castIf(NSArray, changeDict[@"rows"]);
+//    if (!rows) {
+//        *errorMessage = @"No 'rows' array in response";
+//        return -1;
+//    }
+//    NSMutableArray *changes = [[NSMutableArray alloc] init];
+//    for(NSDictionary *row in rows) {
+//        NSDictionary *rowValue = (NSDictionary *)[row objectForKey:@"value"];
+//        NSMutableDictionary *change = @{
+//                                        @"id":[row objectForKey:@"id"],
+//                                        @"seq":[rowValue objectForKey:@"rev"],
+//                                        @"changes": @[@{@"rev": [rowValue objectForKey:@"rev"]}]
+//                                        };
+//        [changes addObject:change];
+//    }
+//    if (![self receivedChanges:changes errorMessage:errorMessage]) return -1;
+//    return changes.count;
+//}
 
 @end

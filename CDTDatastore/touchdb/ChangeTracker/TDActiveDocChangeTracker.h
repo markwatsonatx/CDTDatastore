@@ -15,13 +15,14 @@
 
 #import <Foundation/Foundation.h>
 #import "CDTURLSession.h"
+#import "CDTActiveDocFetcherDelegate.h"
 #import "TDChangeTracker.h"
-@class TDAllDocsChangeTracker;
+@class TDActiveDocChangeTracker;
 @protocol TDAuthorizer;
 
 /** Reads the continuous-mode _changes feed of a database, and sends the individual change entries
  * to its client.  */
-@interface TDAllDocsChangeTracker : NSObject {
+@interface TDActiveDocChangeTracker : NSObject {
 @protected
     NSURL* _databaseURL;
     id<TDChangeTrackerClient> __weak _client;
@@ -43,7 +44,8 @@
                 conflicts:(BOOL)includeConflicts
              lastSequence:(id)lastSequenceID
                    client:(id<TDChangeTrackerClient>)client
-                  session:(CDTURLSession*)session;
+                  session:(CDTURLSession*)session
+         activeDocFetcher:(id<CDTActiveDocFetcherDelegate>)activeDocFetcher;
 
 @property (readonly, nonatomic) NSURL* databaseURL;
 @property (readonly, nonatomic) NSString* databaseName;

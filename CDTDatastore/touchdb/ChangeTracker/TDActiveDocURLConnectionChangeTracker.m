@@ -16,7 +16,9 @@
 // <http://wiki.apache.org/couchdb/HTTP_database_API#Changes>
 //
 
-#import "TDAllDocsURLConnectionChangeTracker.h"
+#import "CDTActiveDoc.h"
+#import "CDTActiveDocFetcherDelegate.h"
+#import "TDActiveDocURLConnectionChangeTracker.h"
 #import "TDRemoteRequest.h"
 #import "TDAuthorizer.h"
 #import "TDStatus.h"
@@ -32,16 +34,17 @@
 #define kMaxRetries 6
 #define kInitialRetryDelay 0.2
 
-@interface TDAllDocsURLConnectionChangeTracker()
+@interface TDActiveDocURLConnectionChangeTracker()
 @property (strong, nonatomic) NSMutableData* inputBuffer;
 @property (strong, nonatomic) NSMutableURLRequest *request;
 @property (strong, nonatomic) NSDate* startTime;
 @property (nonatomic, readwrite) NSUInteger totalRetries;
 @property (nonatomic, strong) CDTURLSession * session;
 @property (nonatomic, strong) CDTURLSessionTask * task;
+@property (nonatomic, strong) id<CDTActiveDocFetcherDelegate> activeDocFetcherDelegate;
 @end
 
-@implementation TDAllDocsURLConnectionChangeTracker
+@implementation TDActiveDocURLConnectionChangeTracker
 
 - (instancetype)initWithDatabaseURL:(NSURL *)databaseURL
                                mode:(TDChangeTrackerMode)mode
@@ -49,6 +52,7 @@
                        lastSequence:(id)lastSequenceID
                              client:(id<TDChangeTrackerClient>)client
                             session:(CDTURLSession *)session
+                   activeDocFetcher:(id<CDTActiveDocFetcherDelegate>)activeDocFetcher
 {
     NSParameterAssert(session);
     self = [super initWithDatabaseURL:databaseURL
@@ -56,30 +60,28 @@
                             conflicts:includeConflicts
                          lastSequence:lastSequenceID
                                client:client
-                              session:session];
+                              session:session
+                     activeDocFetcher:activeDocFetcher];
     
     if(self){
         _session = session;
+        self.activeDocFetcherDelegate = activeDocFetcher;
+        if (! self.activeDocFetcherDelegate) {
+            self.activeDocFetcherDelegate = self;
+        }
     }
     return self;
 }
 
-
-- (BOOL)start
-{
-    if (self.task) return NO;
-    
-    CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Starting...", [self class]);
-    [super start];
-    
+- (NSMutableURLRequest *)getFetchAllActiveDocsRequest {
     NSURL* url = self.allDocsURL;
-    self.request = [[NSMutableURLRequest alloc] initWithURL:url];
-    self.request.cachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
-    self.request.HTTPMethod = @"GET";
+    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
+    request.cachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+    request.HTTPMethod = @"GET";
     
     // Add headers from my .requestHeaders property:
     for(NSString *key in self.requestHeaders) {
-        [self.request setValue:self.requestHeaders[key] forHTTPHeaderField:key];
+        [request setValue:self.requestHeaders[key] forHTTPHeaderField:key];
     }
     
     NSArray *requestHeadersKeys = [self.requestHeaders allKeys];
@@ -91,9 +93,45 @@
                 CDTLogWarn(CDTREPLICATION_LOG_CONTEXT, @"%@ Overwriting 'Authorization' header with "
                            @"value %@", self, authHeader);
             }
-            [self.request setValue: authHeader forHTTPHeaderField:@"Authorization"];
+            [request setValue: authHeader forHTTPHeaderField:@"Authorization"];
         }
     }
+    return request;
+}
+
+- (NSArray *)parseActiveDocsFromResponse:(NSData*)body errorMessage:(NSString**)errorMessage {
+    if (!body) {
+        *errorMessage = @"No body in response";
+        return nil;
+    }
+    NSError* error;
+    id changeObj = [TDJSON JSONObjectWithData:body options:0 error:&error];
+    if (!changeObj) {
+        *errorMessage = $sprintf(@"JSON parse error: %@", error.localizedDescription);
+        return nil;
+    }
+    NSDictionary* changeDict = $castIf(NSDictionary, changeObj);
+    NSArray* rows = $castIf(NSArray, changeDict[@"rows"]);
+    if (!rows) {
+        *errorMessage = @"No 'rows' array in response";
+        return nil;
+    }
+    NSMutableArray *activeDocs = [[NSMutableArray alloc] init];
+    for(NSDictionary *row in rows) {
+        NSDictionary *rowValue = (NSDictionary *)[row objectForKey:@"value"];
+        [activeDocs addObject:[[CDTActiveDoc alloc] initWithId:[row objectForKey:@"id"] revision:[rowValue objectForKey:@"rev"]]];
+    }
+    return activeDocs;
+}
+
+- (BOOL)start
+{
+    if (self.task) return NO;
+    
+    CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Starting...", [self class]);
+    [super start];
+    
+    self.request = [self.activeDocFetcherDelegate getFetchAllActiveDocsRequest];
     
     self.task = [self.session dataTaskWithRequest:self.request taskDelegate:self];
     
@@ -102,7 +140,7 @@
     self.inputBuffer = [NSMutableData dataWithCapacity:0];
     
     self.startTime = [NSDate date];
-    CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Started... <%@>", self, TDCleanURLtoString(url));
+    //CDTLogInfo(CDTREPLICATION_LOG_CONTEXT, @"%@: Started... <%@>", self, TDCleanURLtoString(url));
     
     return YES;
 }
@@ -252,7 +290,29 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     
     BOOL restart = NO;
     NSString* errorMessage = nil;
-    NSInteger numChanges = [self receivedPollResponse:self.inputBuffer errorMessage:&errorMessage];
+    NSInteger numChanges;
+    NSArray *activeDocs = [self.activeDocFetcherDelegate parseActiveDocsFromResponse:self.inputBuffer errorMessage:&errorMessage];
+    if (! activeDocs) {
+        numChanges = -1;
+    }
+    else {
+        // Convert activeDocs to changes
+        NSMutableArray *changes = [[NSMutableArray alloc] init];
+        for(CDTActiveDoc *activeDoc in activeDocs) {
+            NSMutableDictionary *change = @{
+                                            @"id":activeDoc._id,
+                                            @"seq":activeDoc.revision,
+                                            @"changes": @[@{@"rev": activeDoc.revision}]
+                                            };
+            [changes addObject:change];
+        }
+        if (![self receivedChanges:changes errorMessage:&errorMessage]) {
+            numChanges = -1;
+        }
+        else {
+            numChanges = changes.count;
+        }
+    }
     
     if (numChanges < 0) {
         // unparseable response. See if it gets special handling:

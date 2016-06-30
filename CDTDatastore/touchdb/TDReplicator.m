@@ -15,10 +15,11 @@
 //  either express or implied. See the License for the specific language governing permissions
 //  and limitations under the License.
 
+#import "CDTActiveDocFetcherDelegate.h"
 #import "TDReplicator.h"
 #import "TDPusher.h"
 #import "TDPuller.h"
-#import "TDPuller2.h"
+#import "TDActiveDocPuller.h"
 #import "TD_Database+Replication.h"
 #import "TDRemoteRequest.h"
 #import "TDAuthorizer.h"
@@ -75,18 +76,23 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
                       push:(BOOL)push
                 continuous:(BOOL)continuous
               interceptors:(NSArray*)interceptors
+     pullActiveDocStrategy:(BOOL)pullActiveDocStrategy
+      pullActiveDocFetcher:(id<CDTActiveDocFetcherDelegate>)pullActiveDocFetcher
+
 {
     NSParameterAssert(db);
     NSParameterAssert(remote);
 
     // TDReplicator is an abstract class; instantiating one actually instantiates a subclass.
     if ([self class] == [TDReplicator class]) {
-        Class klass = push ? [TDPusher class] : [TDPuller2 class];
+        Class klass = push ? [TDPusher class] : (pullActiveDocStrategy ? [TDActiveDocPuller class] : [TDPuller class]);
         return [[klass alloc] initWithDB:db
                                   remote:remote
                                     push:push
                               continuous:continuous
-                            interceptors:interceptors];
+                            interceptors:interceptors
+                         pullActiveDocStrategy:pullActiveDocStrategy
+                         pullActiveDocFetcher:pullActiveDocFetcher];
     }
 
     self = [super init];

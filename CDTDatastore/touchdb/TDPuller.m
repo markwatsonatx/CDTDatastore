@@ -61,8 +61,10 @@ static NSString* joinQuotedEscaped(NSArray* strings);
                       push:(BOOL)push
                 continuous:(BOOL)continuous
               interceptors:(NSArray*)interceptors
+     pullActiveDocStrategy:(BOOL)pullActiveDocStrategy
+      pullActiveDocFetcher:(id<CDTActiveDocFetcherDelegate>)pullActiveDocFetcher
 {
-    if (self = [super initWithDB:db remote:remote push:push continuous:continuous interceptors:interceptors])
+    if (self = [super initWithDB:db remote:remote push:push continuous:continuous interceptors:interceptors pullActiveDocStrategy:nil pullActiveDocFetcher:nil])
     {
         NSUInteger initialRevsCapacity = 100;
         _deletedRevsToPull = [[NSMutableArray alloc] initWithCapacity:initialRevsCapacity];

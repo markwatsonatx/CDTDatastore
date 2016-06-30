@@ -9,6 +9,7 @@
 //
 
 #import <Foundation/Foundation.h>
+#import "CDTActiveDocFetcherDelegate.h"
 #import "CDTURLSession.h"
 
 @class TD_Database, TD_RevisionList, TDBatcher, TDReachability;
@@ -60,7 +61,9 @@ extern NSString* TDReplicatorStoppedNotification;
                     remote:(NSURL*)remote
                       push:(BOOL)push
                 continuous:(BOOL)continuous
-              interceptors:(NSArray*)interceptors;
+              interceptors:(NSArray*)interceptors
+     pullActiveDocStrategy:(BOOL)pullActiveDocStrategy
+      pullActiveDocFetcher:(id<CDTActiveDocFetcherDelegate>)pullActiveDocFetcher;
 
 @property (weak, readonly) TD_Database* db;
 @property (readonly) NSURL* remote;
@@ -134,5 +137,14 @@ extern NSString* TDReplicatorStoppedNotification;
 
 /** Exposed for testing. Returns the doc ID for the checkpoint document. */
 - (NSString *)remoteCheckpointDocID;
+
+/** Whether or not to use the active document/revision strategy for pulling documents
+ */
+@property (nonatomic) BOOL pullActiveDocStrategy;
+
+/** A custom object for fetching the active document/revisions.
+ */
+@property (nullable, nonatomic, copy) id<CDTActiveDocFetcherDelegate> pullActiveDocFetcher;
+
 
 @end

@@ -8,14 +8,15 @@
 //  Modifications for this distribution by Cloudant, Inc., Copyright (c) 2014 Cloudant, Inc.
 //
 
+#import "CDTActiveDocFetcherDelegate.h"
 #import "TDReplicator.h"
 #import "TD_Revision.h"
-@class TDAllDocsChangeTracker, TDSequenceMap;
+@class TDActiveDocChangeTracker, TDSequenceMap;
 
 /** Replicator that pulls from a remote CouchDB. */
-@interface TDPuller2 : TDReplicator {
+@interface TDActiveDocPuller : TDReplicator {
 @private
-    TDAllDocsChangeTracker* _changeTracker;
+    TDActiveDocChangeTracker* _changeTracker;
     BOOL _caughtUp;                      // Have I received all current _changes entries?
     TDSequenceMap* _pendingSequences;    // Received but not yet copied into local DB
     NSMutableArray* _revsToPull;         // Queue of TDPulledRevisions to download

@@ -113,6 +113,11 @@
             [doc setObject:self.filterParams forKey:@"query_params"];
         }
     }
+    
+    [doc setObject:[NSNumber numberWithBool:self.activeDocStrategy] forKey:@"activeDocStrategy"];
+    if (self.activeDocFetcher) {
+        [doc setObject:self.activeDocFetcher forKey:@"activeDocFetcher"];
+    }
 
     return doc;
 }

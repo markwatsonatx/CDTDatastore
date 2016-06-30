@@ -14,6 +14,7 @@
 //  and limitations under the License.
 
 #import "CDTAbstractReplication.h"
+//#import "CDTActiveDocFetcherDelegate.h"
 
 /**
 
@@ -152,5 +153,15 @@
  @see -filter
  */
 @property (nullable, nonatomic, copy) NSDictionary *filterParams;
+
+/** Whether or not to use the active document/revision strategy for pulling documents
+ */
+@property (nonatomic) BOOL activeDocStrategy;
+
+/** A custom object for fetching the active document/revisions.
+ */
+//@property (nullable, nonatomic, copy) id<CDTActiveDocFetcherDelegate> activeDocFetcher;
+@property (nullable, nonatomic, copy) id activeDocFetcher;
+
 
 @end

@@ -354,12 +354,16 @@ static NSDictionary* parseSourceOrTarget(NSDictionary* properties, NSString* key
     }
 
     BOOL continuous = [$castIf(NSNumber, properties[@"continuous"]) boolValue];
-
+    BOOL pullActiveDocStrategy = [$castIf(NSNumber, properties[@"pullActiveDocStrategy"]) boolValue];
+    id<CDTActiveDocFetcherDelegate> pullActiveDocFetcher = properties[@"pullActiveDocFetcher"];
+    
     TDReplicator* repl = [[TDReplicator alloc] initWithDB:db
                                                    remote:remote
                                                      push:push
                                                continuous:continuous
-                                             interceptors:httpInterceptors];
+                                             interceptors:httpInterceptors
+                                    pullActiveDocStrategy:properties
+                                     pullActiveDocFetcher:pullActiveDocFetcher];
     if (!repl) {
         if (outStatus) *outStatus = kTDStatusServerError;
         return nil;
