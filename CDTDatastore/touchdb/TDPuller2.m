@@ -309,6 +309,28 @@ static NSString* joinQuotedEscaped(NSArray* strings);
 // Process a bunch of remote revisions from the _changes feed at once
 - (void)processInbox:(TD_RevisionList*)inbox
 {
+    // Delete existing documents that have been deleted from the server
+    NSDictionary *allDocs = [self.db getAllDocs:nil];
+    for (NSDictionary *doc in [allDocs objectForKey:@"rows"]) {
+        BOOL found = false;
+        NSString *dbDocId = [doc objectForKey:@"id"];
+        NSString *dbRevision = [((NSDictionary *)[doc objectForKey:@"value"]) objectForKey:@"rev"];
+        for (NSDictionary *inboxDocId in inbox.allDocIDs) {
+            if ([dbDocId isEqualToString:inboxDocId]) {
+                found = YES;
+                break;
+            }
+        }
+        if (! found) {
+            TDStatus status;
+            TD_Revision *td_revision = [[TD_Revision alloc] initWithDocID:dbDocId revID:nil deleted:YES];
+            TD_Revision *new = [self.db putRevision:td_revision
+                                           prevRevisionID:dbRevision
+                                            allowConflict:NO
+                                                   status:&status];
+        }
+    }
+    
     // Ask the local database which of the revs are not known to it:
     CDTLogVerbose(CDTREPLICATION_LOG_CONTEXT, @"%@: Looking up %@", self, inbox);
     id lastInboxSequence = [inbox.allRevisions.lastObject remoteSequenceID];
@@ -606,25 +628,6 @@ static NSString* joinQuotedEscaped(NSArray* strings);
 - (void)insertDownloads:(NSArray*)downloads
 {
     
-    // Get all docs in the local database to see which ones need to be deleted
-    NSDictionary *allDocs = [self.db getAllDocs:nil];
-    NSLog(@"ALLDOCS = %@", allDocs);
-    NSLog(@"lastSequence = %@", _lastSequence);
-    
-//    // in TDPusher, _lastSequence is always an NSNumber
-//    NSNumber *maxPendingSequence = [(NSNumber*)_lastSequence longLongValue];
-//    
-//    // Include conflicts so all conflicting revisions are replicated too
-//    TDChangesOptions options = kDefaultTDChangesOptions;
-//    options.includeConflicts = YES;
-//    // Process existing changes since the last push:
-//    [self addRevsToInbox:[_db changesSinceSequence:_maxPendingSequence
-//                                           options:&options
-//                                            filter:self.filter
-//                                            params:_filterParameters]];
-//    [_batcher flush];  // process up to the first 100 revs
-    
-    
     CDTLogVerbose(CDTREPLICATION_LOG_CONTEXT, @"%@ inserting %u revisions...", self,
                   (unsigned)downloads.count);
     CFAbsoluteTime time = CFAbsoluteTimeGetCurrent();
@@ -664,6 +667,9 @@ static NSString* joinQuotedEscaped(NSArray* strings);
         CDTLogVerbose(CDTREPLICATION_LOG_CONTEXT, @"%@ finished inserting %u revisions", self,
                       (unsigned)downloads.count);
         
+        // Checkpoint:
+        self.lastSequence = _pendingSequences.checkpointedValue;
+
         //        success = YES;
     }
     @catch (NSException* x) { MYReportException(x, @"%@: Exception inserting revisions", self); }

@@ -592,6 +592,7 @@ NSString* TDReplicatorStartedNotification = @"TDReplicatorStarted";
     ++_revisionsFailed;
 }
 
+// Before doing anything else, determine whether we have an active login session.
 - (void)checkSession
 {
     if (![_authorizer respondsToSelector:@selector(loginParametersForSite:)]) {
