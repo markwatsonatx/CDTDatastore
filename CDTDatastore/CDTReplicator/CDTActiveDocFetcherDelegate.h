@@ -8,7 +8,7 @@
 
 #import <Foundation/Foundation.h>
 
-@protocol CDTActiveDocFetcherDelegate
+@protocol CDTActiveDocFetcherDelegate<NSObject>
 
 - (NSMutableURLRequest *)getFetchAllActiveDocsRequest;
 - (NSArray *)parseActiveDocsFromResponse:(NSData*)body errorMessage:(NSString**)errorMessage;

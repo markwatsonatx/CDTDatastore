@@ -14,7 +14,7 @@
 //  and limitations under the License.
 
 #import "CDTAbstractReplication.h"
-//#import "CDTActiveDocFetcherDelegate.h"
+#import "CDTActiveDocFetcherDelegate.h"
 
 /**
 
@@ -160,8 +160,8 @@
 
 /** A custom object for fetching the active document/revisions.
  */
-//@property (nullable, nonatomic, copy) id<CDTActiveDocFetcherDelegate> activeDocFetcher;
-@property (nullable, nonatomic, copy) id activeDocFetcher;
+@property (nullable, nonatomic, copy) id<CDTActiveDocFetcherDelegate> activeDocFetcher;
+//@property (nullable, nonatomic, copy) id activeDocFetcher;
 
 
 @end
