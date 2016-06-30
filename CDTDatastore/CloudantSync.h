@@ -38,3 +38,4 @@
 #import "CDTReplicatorDelegate.h"
 
 #import "CDTActiveDocFetcherDelegate.h"
+#import "CDTActiveDoc.h"

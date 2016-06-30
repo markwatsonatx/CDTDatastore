@@ -299,7 +299,7 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
         // Convert activeDocs to changes
         NSMutableArray *changes = [[NSMutableArray alloc] init];
         for(CDTActiveDoc *activeDoc in activeDocs) {
-            NSMutableDictionary *change = @{
+            NSDictionary *change = @{
                                             @"id":activeDoc._id,
                                             @"seq":activeDoc.revision,
                                             @"changes": @[@{@"rev": activeDoc.revision}]

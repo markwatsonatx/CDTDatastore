@@ -160,7 +160,7 @@
 
 /** A custom object for fetching the active document/revisions.
  */
-@property (nullable, nonatomic, copy) id<CDTActiveDocFetcherDelegate> activeDocFetcher;
+@property (nullable, nonatomic, strong) id<CDTActiveDocFetcherDelegate> activeDocFetcher;
 //@property (nullable, nonatomic, copy) id activeDocFetcher;
 
 

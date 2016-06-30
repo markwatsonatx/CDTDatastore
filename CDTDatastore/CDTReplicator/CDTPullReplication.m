@@ -57,6 +57,8 @@
         copy.target = self.target;
         copy.filter = self.filter;
         copy.filterParams = self.filterParams;
+        copy.activeDocStrategy = self.activeDocStrategy;
+        copy.activeDocFetcher = self.activeDocFetcher;
     }
 
     return copy;
@@ -114,9 +116,9 @@
         }
     }
     
-    [doc setObject:[NSNumber numberWithBool:self.activeDocStrategy] forKey:@"activeDocStrategy"];
+    [doc setObject:[NSNumber numberWithBool:self.activeDocStrategy] forKey:@"pullActiveDocStrategy"];
     if (self.activeDocFetcher) {
-        [doc setObject:self.activeDocFetcher forKey:@"activeDocFetcher"];
+        [doc setObject:self.activeDocFetcher forKey:@"pullActiveDocFetcher"];
     }
 
     return doc;
